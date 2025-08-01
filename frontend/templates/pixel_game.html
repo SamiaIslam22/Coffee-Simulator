@@ -1895,14 +1895,33 @@
         
         function handleCanvasClick(event) {
             const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
+            
+            // ✅ FIXED: Account for canvas scaling (1.04x scale)
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (event.clientX - rect.left) * scaleX;
+            const y = (event.clientY - rect.top) * scaleY;
+            
+            console.log(`🖱️ Click at: (${x.toFixed(0)}, ${y.toFixed(0)})`);
             
             customers.forEach(customer => {
+                const clickAreaLeft = customer.x - 60;   // Wider click area
+                const clickAreaRight = customer.x + 60;
+                const clickAreaTop = customer.y - 120;  // Higher click area
+                const clickAreaBottom = customer.y + 100; // Lower click area
+                
+                console.log(`👤 Customer ${customer.id} at (${customer.x.toFixed(0)}, ${customer.y.toFixed(0)}) state: ${customer.state}`);
+                console.log(`📱 Click area: ${clickAreaLeft}-${clickAreaRight}, ${clickAreaTop}-${clickAreaBottom}`);
+                
                 if (customer.state === 'waiting' && 
-                    x >= customer.x - 50 && x <= customer.x + 50 && // Wider click area at counter
-                    y >= customer.y - 100 && y <= customer.y + 80) { // Click area for counter position (y=320)
+                    x >= clickAreaLeft && x <= clickAreaRight && 
+                    y >= clickAreaTop && y <= clickAreaBottom) {
+                    
+                    console.log(`✅ Customer ${customer.id} clicked! Opening menu...`);
                     showMenu(customer);
+                } else if (customer.state === 'waiting') {
+                    console.log(`❌ Customer ${customer.id} in waiting state but click missed area`);
                 }
             });
         }
