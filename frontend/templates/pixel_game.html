@@ -1566,43 +1566,94 @@ reaction.style.top = (this.y - 60) + 'px';  // Keep same height
         }
         
         function connectWebSocket() {
-            try {
-                socket = io();
-                
-                socket.on('connect', function() {
-                    console.log('🔌 Connected to server');
-                    updateLoadingInfo('Connected to server...');
-                });
-                
-                socket.on('connected', function(data) {
-                    console.log('✅ Game session started:', data.session_id);
-                });
-                
-                socket.on('inventory_updated', function(data) {
-                    gameState.inventory = data;
-                    // Update inventory display if panel is open
-                    if (inventoryVisible) {
-                        inventoryData = data;
-                        updateInventoryDisplay();
-                        updateInventoryButton();
-                    }
-                });
-                
-                socket.on('order_completed', function(data) {
-                    gameState.earnings += data.item.price || 0;
-                    gameState.customers++;
-                    updateUI();
-                });
-                
-                socket.on('disconnect', function() {
-                    console.log('🔌 Disconnected from server');
-                });
-                
-            } catch (error) {
-                console.error('❌ WebSocket connection failed:', error);
-            }
-        }
+    try {
+        socket = io();
         
+        socket.on('connect', function() {
+            console.log('🔌 Connected to server');
+            updateLoadingInfo('Connected to server...');
+        });
+        
+        socket.on('connected', function(data) {
+            console.log('✅ Game session started:', data.session_id);
+        });
+        
+        // ✅ FIXED: Only handle inventory updates, no duplicate counting
+        socket.on('inventory_updated', function(data) {
+            console.log('📦 Inventory updated via WebSocket');
+            gameState.inventory = data;
+            
+            // Update inventory display if panel is open
+            if (inventoryVisible) {
+                inventoryData = data;
+                updateInventoryDisplay();
+                updateInventoryButton();
+            }
+        });
+        
+        // ✅ FIXED: Remove duplicate earnings/customer counting
+        socket.on('order_completed', function(data) {
+            console.log('✅ Order completed via WebSocket:', data);
+            
+            // ❌ REMOVED: gameState.earnings += data.item.price || 0;
+            // ❌ REMOVED: gameState.customers++;
+            
+            // ✅ Only update UI and log the completion
+            // The actual counting is handled in processOrder() function
+            console.log(`Order processed: ${data.item?.name || 'Unknown item'}`);
+            
+            // Optional: Show a subtle notification without affecting counts
+            if (data.item && data.item.name) {
+                console.log(`📋 Backend confirmed: ${data.item.name} served`);
+            }
+            
+            // Force UI update to reflect any backend changes
+            updateUI();
+        });
+        
+        // ✅ NEW: Handle purchase completions separately
+        socket.on('purchase_completed', function(data) {
+    console.log('💰 Purchase completed via WebSocket:', data);
+    
+    // ✅ IMPROVED: Sync earnings with backend after purchase
+    if (data.money_remaining !== undefined) {
+        const previousEarnings = gameState.earnings;
+        gameState.earnings = data.money_remaining;
+        
+        console.log(`💸 Purchase: $${previousEarnings.toFixed(2)} → $${gameState.earnings.toFixed(2)}`);
+        updateUI();
+    }
+    
+    // ✅ IMPROVED: Show better purchase notification
+    if (data.item && data.cost) {
+        console.log(`🛒 Purchased: ${data.item} for $${data.cost.toFixed(2)}`);
+        
+        // Optional: Show in-game notification
+        showAlert(`✅ Restocked ${data.item}! Cost: $${data.cost.toFixed(2)}`, 'success');
+    }
+    
+    // ✅ IMPROVED: Auto-refresh inventory display if panel is open
+    if (inventoryVisible) {
+        setTimeout(() => {
+            loadInventoryData();
+        }, 500);
+    }
+});
+        socket.on('disconnect', function() {
+            console.log('🔌 Disconnected from server');
+        });
+        
+        // ✅ NEW: Handle connection errors gracefully
+        socket.on('connect_error', function(error) {
+            console.error('❌ WebSocket connection error:', error);
+            updateLoadingInfo('Connection failed, but game can continue...');
+        });
+        
+    } catch (error) {
+        console.error('❌ WebSocket connection failed:', error);
+        console.log('🎮 Game will continue without real-time features');
+    }
+}
         async function loadGameData() {
             console.log('📊 Loading game data...');
             updateLoadingInfo('Loading game data...');
@@ -1919,83 +1970,109 @@ if (menuState.step === 6 || (menuState.category === 'bakery' && menuState.step =
 
 addBackButton();
 }  // ADD THIS LINE
-        function buildAndProcessOrder() {
-    if (!validateMenuState()) return;
+        // 🔧 FIXED processOrder function - prevents duplicate counting
+async function processOrder(customer, item) {
+    if (!customer || !item) return;
     
-    let finalItem = null;
-    let basePrice = 0;
-    
-    if (menuState.category === 'drinks') {
-        let orderName = '';
-        let milkType = menuState.milk || 'regularmilk';
-        
-        if (menuState.drinkType === 'expresso') {
-            milkType = '';
-            orderName = `${menuState.size} ${menuState.temperature} ${menuState.drinkType}`;
-        } else {
-            orderName = `${menuState.size} ${milkType} ${menuState.temperature} ${menuState.drinkType}`;
+    try {
+        let orderType = 'coffee';
+        if (item.category === 'food' || item.category === 'bakery' || 
+            ['Plain Bagel', 'Strawberry Cake', 'Sesameseed Bagel', 'Honey Bun', 'Cinnamon Roll', 'Croissant'].includes(item.name)) {
+            orderType = 'food';
         }
         
-        if (orderName.includes('null') || orderName.includes('undefined')) {
-            showAlert('Order error: Please restart selection', 'error');
-            closeMenu();
-            return;
-        }
+        const orderData = {
+            type: orderType,
+            item_id: item.id || item.name.toLowerCase().replace(/\s+/g, '_'),
+            payment_method: menuState.paymentMethod,
+            payment_details: { 
+                cash_amount: item.price + 1.00,
+                tip: customer.patience > 0.7 ? 0.50 : 0,
+                base_price: item.originalPrice || item.price,
+                tax_amount: item.taxAmount || 0,
+                payment_type: menuState.paymentMethod
+            }
+        };
         
-        // Find matching item
-        let matchingItem = gameState.allMenuItems.find(item => {
-            return item.name && item.name.toLowerCase().trim() === orderName.toLowerCase().trim();
+        const response = await fetch('/api/game/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderData)
         });
         
-        if (!matchingItem) {
-            showAlert(`Item not found: ${orderName}`, 'error');
-            closeMenu();
-            return;
+        const result = await response.json();
+        
+        if (result.success) {
+            customer.removeSpeechBubble();
+            
+            // Check if order is correct (simple matching)
+            const customerOrder = customer.order?.name?.toLowerCase().trim() || '';
+            const providedOrder = item.name?.toLowerCase().trim() || '';
+            const orderCorrect = customerOrder === providedOrder || 
+                               customerOrder.includes(providedOrder) || 
+                               providedOrder.includes(customerOrder);
+            
+            // Show appropriate reaction
+            if (orderCorrect && customer.patience > 0.5) {
+                customer.showReaction('happy');
+                customer.satisfied = true;
+                gameState.rating = Math.min(100, gameState.rating + 2);
+                
+                const paymentInfo = menuState.paymentMethod === 'card' && item.taxAmount > 0 
+                    ? ` (${menuState.paymentMethod}, +$${item.taxAmount.toFixed(2)} fee)` 
+                    : ` (${menuState.paymentMethod})`;
+                const bonus = orderData.payment_details.tip > 0 ? ` + $${orderData.payment_details.tip.toFixed(2)} tip!` : '';
+
+                showAlert(`Order completed! +$${item.price.toFixed(2)}${paymentInfo}${bonus}`, 'success');
+                
+                // ✅ FIXED: Only increment earnings and customers ONCE here
+                // Remove the duplicate increment that was happening later
+                gameState.earnings += item.price;
+                gameState.customers++;
+                
+            } else {
+                customer.showReaction('angry');
+                customer.satisfied = false;
+                gameState.rating = Math.max(0, gameState.rating - 3);
+                showAlert(`Order wrong or customer unhappy!`, 'error');
+                
+                // ✅ FIXED: Only increment customer count for unhappy customers too
+                gameState.customers++;
+                // Note: No earnings increment for wrong orders
+            }
+            
+            customer.state = 'leaving';
+            updateUI();
+            
+            // Update inventory after order
+            if (inventoryVisible) {
+                setTimeout(() => {
+                    loadInventoryData();
+                }, 1000);
+            }
+            
+        } else {
+            showAlert(`Error: ${result.error}`, 'error');
+            customer.showReaction('angry');
+            customer.state = 'leaving';
+            // Customer count still increments for failed orders
+            gameState.customers++;
+            updateUI();
         }
         
-        finalItem = matchingItem;
-        basePrice = matchingItem.price;
-        
-    } else if (menuState.category === 'bakery' && menuState.selectedBakeryItem) {
-        finalItem = {
-            id: menuState.selectedBakeryItem.id,
-            name: menuState.selectedBakeryItem.name,
-            price: menuState.selectedBakeryItem.price,
-            category: 'food'
-        };
-        basePrice = menuState.selectedBakeryItem.price;
+    } catch (error) {
+        console.error('Order processing error:', error);
+        showAlert('Error processing order. Please try again.', 'error');
+        customer.showReaction('angry');
+        customer.state = 'leaving';
+        gameState.customers++;
+        updateUI();
     }
     
-    if (!finalItem) {
-        showAlert('Order error: No item selected', 'error');
-        closeMenu();
-        return;
-    }
-    
-    // NEW: Calculate final price with tax
-    const taxRate = menuState.paymentMethod === 'card' ? 0.015 : 0;
-    const taxAmount = basePrice * taxRate;
-    const finalPrice = basePrice + taxAmount;
-    
-    // NEW: Show price breakdown if there's tax
-    if (taxAmount > 0) {
-        showAlert(
-            `Order: ${finalItem.name}\n` +
-            `Base Price: ${basePrice.toFixed(2)}\n` +
-            `Card Fee (1.5%): ${taxAmount.toFixed(2)}\n` +
-            `Total: ${finalPrice.toFixed(2)}`, 
-            'info'
-        );
-    }
-    
-    // Update the item price for processing
-    finalItem.originalPrice = basePrice;
-    finalItem.taxAmount = taxAmount;
-    finalItem.price = finalPrice;
-    
-    processOrder(menuState.currentCustomer, finalItem);
+    closeMenu();
 }
-        
+
+
         function calculateExactSimilarity(customerOrder, builtOrder) {
             if (!customerOrder || !builtOrder) return 0;
             
@@ -2257,6 +2334,7 @@ showAlert(`Order completed! +${item.price.toFixed(2)}${paymentInfo}${bonus}`, 's
         }
         
         function updateUI() {
+    // ✅ Only UPDATE displays, never increment values here
     document.getElementById('earnings').textContent = gameState.earnings.toFixed(2);
     document.getElementById('customers').textContent = gameState.customers;
     document.getElementById('rating').textContent = Math.round(gameState.rating);
@@ -2300,6 +2378,9 @@ showAlert(`Order completed! +${item.price.toFixed(2)}${paymentInfo}${bonus}`, 's
             playerMoneyElement.textContent = gameState.earnings.toFixed(2);
         }
     }
+    
+    // ✅ Debug logging to track values
+    console.log(`💰 UI Update - Earnings: $${gameState.earnings.toFixed(2)}, Customers: ${gameState.customers}`);
 }
         
         function showAlert(message, type = 'info') {
