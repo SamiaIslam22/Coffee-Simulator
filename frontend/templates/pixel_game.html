@@ -25,14 +25,15 @@
     border-radius: 10px;
     box-shadow: 0 0 20px rgba(26, 188, 156, 0.5);
     
-    /* BIGGER: Increased container size */
-    max-width: 1200px;  /* Increased from 1000px */
-    max-height: 850px;  /* Increased from 700px */
-    width: 1200px;      /* Increased from 1000px */
-    height: 850px;      /* Increased from 700px */
+    /* 30% BIGGER: Keep original size but scale up slightly */
+    max-width: 1000px;  /* Keep original */
+    max-height: 700px;  /* Keep original */
+    width: 1000px;      /* Keep original */
+    height: 700px;      /* Keep original */
     
     /* Center the game */
     margin: 20px auto;
+    transform: scale(1.04); /* Scale UP by 4% (0.8 * 1.3 = 1.04) */
     transform-origin: center;
 }
 
@@ -43,8 +44,8 @@
     image-rendering: crisp-edges;
     
     /* RESIZE: Smaller canvas */
-    width: 1200px;   /* Reduced from 800px */
-    height: 850px;   /* Reduced from 600px */
+    width: 1000px;   /* Reduced from 800px */
+    height: 700px;   /* Reduced from 600px */
 }
 
 /* Make UI panels smaller too */
