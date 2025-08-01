@@ -596,12 +596,69 @@
                 opacity: 0; 
             }
         }
+        /* ✨ DEVELOPER CREDIT FOOTER */
+#developerCredit {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, rgba(139, 69, 19, 0.95), rgba(160, 82, 45, 0.9));
+    color: #DEB887;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid #CD853F;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    z-index: 15;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+    max-width: 200px;
+    text-align: center;
+}
+
+#developerCredit:hover {
+    background: linear-gradient(135deg, rgba(205, 133, 63, 0.95), rgba(222, 184, 135, 0.9));
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.5);
+    border-color: #DEB887;
+}
+
+.credit-header {
+    color: #F4A460;
+    font-weight: bold;
+    margin-bottom: 2px;
+    font-size: 12px;
+}
+
+.credit-subtitle {
+    color: #D2B48C;
+    font-size: 9px;
+    font-style: italic;
+    opacity: 0.9;
+    line-height: 1.2;
+}
+
+.credit-divider {
+    width: 60%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #CD853F, transparent);
+    margin: 4px auto;
+}
+
+@keyframes sparkle {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+#developerCredit:hover .credit-header {
+    animation: sparkle 2s ease-in-out infinite;
+}
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
-        
+
         <!-- Enhanced Loading Screen -->
         <div id="loadingScreen">
             <div class="loading-spinner"></div>
@@ -615,6 +672,11 @@
                 <span class="ui-label">💰 Earnings:</span>
                 <span class="ui-value">$<span id="earnings">0.00</span></span>
             </div>
+            <div id="developerCredit">
+    <div class="credit-header">☕ Coffee Simulator by Samia Islam</div>
+    <div class="credit-divider"></div>
+    <div class="credit-subtitle">For demo use only — No commercial use allowed</div>
+</div>
             <div class="ui-stat">
                 <span class="ui-label">👥 Customers:</span>
                 <span class="ui-value"><span id="customers">0</span></span>
