@@ -1,0 +1,2369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>☕ Pixel Coffee Shop</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        #gameContainer {
+    position: relative;
+    background: #34495e;
+    border: 4px solid #1abc9c;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(26, 188, 156, 0.5);
+    
+    /* RESIZE: Make container smaller */
+    max-width: 1000px;  /* Reduced from 90vw */
+    max-height: 700px;  /* Reduced from 90vh */
+    width: 1000px;      /* Fixed width */
+    height: 700px;      /* Fixed height */
+    
+    /* Center the game */
+    margin: 20px auto;
+    transform: scale(0.8); /* Scale down by 20% */
+    transform-origin: center;
+}
+
+#gameCanvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    
+    /* RESIZE: Smaller canvas */
+    width: 1000px;   /* Reduced from 800px */
+    height: 700px;   /* Reduced from 600px */
+}
+
+/* Make UI panels smaller too */
+#gameUI {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-size: 12px;  /* Reduced from 14px */
+    z-index: 10;
+    background: rgba(139, 69, 19, 0.85);
+    padding: 8px;    /* Reduced from 15px */
+    border-radius: 12px;
+    border: 2px solid #1abc9c;
+    min-width: 200px;
+    width: 200px; /* Reduced from 200px */
+}
+
+#orderQueue {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: white;
+    font-size: 11px;  /* Reduced from 12px */
+    z-index: 10;
+    background: rgba(139, 69, 19, 0.85);
+    padding: 12px;    /* Reduced from 15px */
+    border-radius: 8px;
+    border: 2px solid #e74c3c;
+    max-width: 220px; /* Reduced from 250px */
+}
+
+        /* Inventory Button - Bottom Right Corner */
+        #inventoryBtn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #D2691E, #CD853F);
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            z-index: 10;
+            border: 2px solid #A0522D;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        #inventoryBtn:hover {
+            background: linear-gradient(135deg, #CD853F, #DEB887);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        }
+
+        #inventoryBtn.alert {
+            background: linear-gradient(135deg, #FF4500, #FF6347);
+            border-color: #FF4500;
+            animation: alertPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes alertPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* Inventory Panel - Bottom Right */
+        #inventoryPanel {
+            position: absolute;
+            bottom: 60px;
+            right: 10px;
+            width: 400px;
+            max-height: 400px;
+            background: rgba(0,0,0,0.95);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 3px solid #D2691E;
+            display: none;
+            z-index: 25;
+            font-size: 12px;
+            overflow-y: auto;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+        }
+
+        #inventoryPanel h3 {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            color: #DEB887;
+            text-align: center;
+            border-bottom: 2px solid #D2691E;
+            padding-bottom: 8px;
+        }
+
+        .inventory-item {
+            background: rgba(210, 105, 30, 0.15);
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #CD853F;
+            transition: all 0.3s ease;
+        }
+
+        .inventory-item.low-stock {
+            border-left-color: #FF8C00;
+            background: rgba(255, 140, 0, 0.2);
+        }
+
+        .inventory-item.out-of-stock {
+            border-left-color: #FF4500;
+            background: rgba(255, 69, 0, 0.2);
+        }
+
+        .inventory-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .inventory-name {
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .inventory-amount {
+            color: #DEB887;
+            font-weight: bold;
+        }
+
+        .inventory-bar {
+            background: rgba(255,255,255,0.2);
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .inventory-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #FF4500, #FF8C00, #D2691E);
+            transition: width 0.3s ease;
+        }
+
+        .buy-button {
+            background: linear-gradient(135deg, #228B22, #32CD32);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            margin-top: 5px;
+            transition: all 0.3s ease;
+            float: right;
+        }
+
+        .buy-button:hover {
+            background: linear-gradient(135deg, #32CD32, #90EE90);
+            transform: translateY(-1px);
+        }
+
+        .buy-button:disabled {
+            background: linear-gradient(135deg, #7f8c8d, #95a5a6);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .buy-button.expensive {
+            background: linear-gradient(135deg, #B22222, #DC143C);
+        }
+
+        .inventory-actions {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #D2691E;
+            text-align: center;
+        }
+
+        .close-inventory-btn {
+            background: linear-gradient(135deg, #B22222, #8B0000);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .close-inventory-btn:hover {
+            background: linear-gradient(135deg, #8B0000, #654321);
+            transform: translateY(-1px);
+        }
+
+        .inventory-summary {
+            background: rgba(139, 69, 19, 0.3);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid #A0522D;
+        }
+
+        .low-stock-alert {
+            background: rgba(255, 140, 0, 0.2);
+            border: 1px solid #FF8C00;
+            padding: 8px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        .success-purchase {
+            background: rgba(34, 139, 34, 0.3);
+            border: 1px solid #228B22;
+            padding: 8px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 11px;
+            text-align: center;
+            animation: successFade 3s ease-out forwards;
+        }
+
+        @keyframes successFade {
+            0% { opacity: 1; }
+            70% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        #menuPanel {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.95);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #f39c12;
+            display: none;
+            z-index: 20;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+        }
+        
+        .menu-item {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            padding: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .menu-item:hover {
+            background: linear-gradient(135deg, #2980b9, #1f4e79);
+            border-color: #1abc9c;
+            transform: translateY(-2px);
+        }
+        
+        .menu-item.coffee-item {
+            background: linear-gradient(135deg, #8B4513, #A0522D);
+        }
+        
+        .menu-item.coffee-item:hover {
+            background: linear-gradient(135deg, #A0522D, #CD853F);
+        }
+        
+        .menu-item.food-item {
+            background: linear-gradient(135deg, #e67e22, #d35400);
+        }
+        
+        .menu-item.food-item:hover {
+            background: linear-gradient(135deg, #d35400, #e67e22);
+        }
+        
+        .hierarchical-option {
+            min-height: 70px !important;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+        }
+        
+        .hierarchical-option strong {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .hierarchical-option small {
+            color: rgba(255,255,255,0.8);
+            font-style: italic;
+            font-size: 10px;
+        }
+        
+        .back-btn {
+            opacity: 0.8;
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d) !important;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            opacity: 1;
+            transform: translateY(-2px);
+        }
+        
+        .speech-bubble {
+            position: absolute;
+            background: white;
+            color: black;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 11px;
+            max-width: 140px;
+            text-align: center;
+            z-index: 15;
+            border: 2px solid #333;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            animation: bounce 0.5s ease-out;
+        }
+        
+        @keyframes bounce {
+            0% { transform: scale(0) translateY(20px); opacity: 0; }
+            50% { transform: scale(1.1) translateY(-5px); opacity: 0.8; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid white;
+        }
+        
+        #alertBox {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            display: none;
+            z-index: 30;
+            text-align: center;
+            border: 3px solid #8B4513;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+            animation: alertPop 0.3s ease-out;
+        }
+        
+        @keyframes alertPop {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        
+        .success-alert {
+    background: linear-gradient(135deg, #D2691E, #CD853F) !important;
+    border: 3px solid #A0522D !important;
+}
+        
+        .info-alert {
+            background: linear-gradient(135deg, #3498db, #2980b9) !important;
+        }
+        .home-button {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    margin-top: 10px;
+    transition: all 0.3s ease;
+    text-align: center;
+    width: 100%;
+}
+
+.home-button:hover {
+    background: linear-gradient(135deg, #c0392b, #a93226);
+    transform: translateY(-1px);
+}
+        .game-button {
+            padding: 8px 15px;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            transition: all 0.3s ease;
+        }
+        
+        .game-button:hover {
+            background: linear-gradient(135deg, #c0392b, #a93226);
+            transform: translateY(-1px);
+        }
+        
+        .game-button.primary {
+            background: linear-gradient(135deg, #1abc9c, #16a085);
+        }
+        
+        .game-button.primary:hover {
+            background: linear-gradient(135deg, #16a085, #138d75);
+        }
+        
+        #loadingScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 40;
+            color: white;
+            font-size: 18px;
+        }
+        
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1abc9c;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-info {
+            font-size: 12px;
+            color: #bdc3c7;
+            margin-top: 10px;
+        }
+        
+        .ui-stat {
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .ui-label {
+            font-weight: bold;
+        }
+        
+        .ui-value {
+            color: #1abc9c;
+            font-weight: bold;
+        }
+        
+        .progress-bar {
+            background: rgba(255,255,255,0.2);
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(90deg, #e74c3c, #1abc9c);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .next-customer-btn {
+            background: linear-gradient(135deg, #D2691E, #CD853F);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+            text-align: center;
+            width: 100%;
+        }
+        
+        .next-customer-btn:hover {
+    background: linear-gradient(135deg, #CD853F, #DEB887);
+    transform: translateY(-1px);
+}
+
+        .next-customer-btn:disabled {
+            background: linear-gradient(135deg, #7f8c8d, #95a5a6);
+            cursor: not-allowed;
+            transform: none;
+        }
+        .reaction-popup {
+            position: absolute;
+            z-index: 16;
+            animation: reactionPop 2s ease-out forwards;
+            pointer-events: none;
+        }
+
+        @keyframes reactionPop {
+            0% { 
+                transform: scale(0) translateY(0); 
+                opacity: 0; 
+            }
+            20% { 
+                transform: scale(1.2) translateY(-10px); 
+                opacity: 1; 
+            }
+            80% { 
+                transform: scale(1) translateY(-15px); 
+                opacity: 1; 
+            }
+            100% { 
+                transform: scale(0.8) translateY(-20px); 
+                opacity: 0; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <!-- Enhanced Loading Screen -->
+        <div id="loadingScreen">
+            <div class="loading-spinner"></div>
+            <div>Loading Coffee Simulator...</div>
+            <div class="loading-info" id="loadingInfo">Starting up...</div>
+        </div>
+        
+        <!-- Game UI -->
+        <div id="gameUI">
+            <div class="ui-stat">
+                <span class="ui-label">💰 Earnings:</span>
+                <span class="ui-value">$<span id="earnings">0.00</span></span>
+            </div>
+            <div class="ui-stat">
+                <span class="ui-label">👥 Customers:</span>
+                <span class="ui-value"><span id="customers">0</span></span>
+            </div>
+            <div class="ui-stat">
+                <span class="ui-label">⭐ Rating:</span>
+                <span class="ui-value"><span id="rating">100</span>%</span>
+            </div>
+            <div class="ui-stat">
+                <span class="ui-label">🎯 Target:</span>
+                <span class="ui-value">$<span id="target">100</span></span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="targetProgress" style="width: 0%"></div>
+            </div>
+            
+            <!-- Next Customer Button -->
+            <button class="next-customer-btn" id="nextCustomerBtn" onclick="spawnNextCustomer()">
+                🚶‍♂️ Call Next Customer
+            </button>
+            
+            <button class="home-button" onclick="goHome()">🏠 Home</button>
+        </div>
+
+        <!-- Inventory Button -->
+        <button id="inventoryBtn" onclick="toggleInventory()">
+            📦 Inventory
+        </button>
+        
+        <!-- Order Queue -->
+        <div id="orderQueue">
+            <div><strong>📋 Customer Status</strong></div>
+            <div id="queueList" style="margin-top: 10px;">Ready to start!</div>
+        </div>
+
+        <!-- Inventory Panel -->
+        <div id="inventoryPanel">
+            <h3>📦 Coffee Shop Inventory</h3>
+            
+            <div id="inventoryAlerts"></div>
+            
+            <div class="inventory-summary">
+                <div><strong>💰 Available Money: $<span id="playerMoney">0.00</span></strong></div>
+                <div><small>Money earned from serving customers</small></div>
+            </div>
+            
+            <div id="inventoryList">
+                <!-- Inventory items will be populated here -->
+            </div>
+            
+            <div class="inventory-actions">
+                <button class="close-inventory-btn" onclick="closeInventory()">❌ Close</button>
+            </div>
+        </div>
+        
+        <!-- Menu Panel -->
+        <div id="menuPanel">
+            <div><strong>📱 Select Item for Customer</strong></div>
+            <div class="menu-grid" id="menuGrid">
+                <!-- Menu items will be populated here -->
+            </div>
+            <button class="game-button" onclick="closeMenu()" style="margin-top:15px;">❌ Close Menu</button>
+        </div>
+        
+        <!-- Alert Box -->
+        <div id="alertBox">
+            <div id="alertText"></div>
+            <button class="game-button primary" onclick="closeAlert()" style="margin-top:15px;">✅ OK</button>
+        </div>
+    </div>
+
+    <script>
+        // 🎮 SEQUENTIAL CUSTOMER COFFEE SIMULATOR
+        // =======================================
+        
+        // Game Variables
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let socket = null;
+        let gameInitialized = false;
+        
+        // 🖼️ IMPROVED IMAGE LOADING SYSTEM
+        let cafeBackground = null;
+        let workerSprite = null;
+        let imagesLoaded = 0;
+        let customerSprites = [];
+        let imageLoadTimeout = null;
+        let loadingStartTime = Date.now();
+        
+        // Game State
+        let gameState = {
+            earnings: 0,
+            customers: 0,
+            rating: 100,
+            target: 100,
+            targetLevel: 1,        // Track which target level we're on
+            targetIncrement: 100,  // How much to increase each time ($100, $200, $300, etc.)
+            inventory: {},
+            menu: { coffee: [], bakery: [] },
+            allMenuItems: []
+        };
+        
+        // 🆕 SEQUENTIAL CUSTOMER SYSTEM
+        let customers = [];
+        let customerIdCounter = 0;
+        let canSpawnNext = true; // Flag to control when new customers can spawn
+        let currentCustomer = null; // Track the active customer
+        
+        // Inventory Management System
+        let inventoryData = {};
+        let inventoryVisible = false;
+        
+        // Menu State
+        let menuState = {
+            step: 0,
+            category: null,
+            drinkType: null,
+            temperature: null,
+            size: null,
+            milk: null,
+            paymentMethod: null,
+            selectedBakeryItem: null,
+            currentCustomer: null
+        };
+        // 🎯 TARGET PROGRESSION FUNCTIONS
+        function checkTargetProgression() {
+            if (gameState.earnings >= gameState.target) {
+                // Target achieved! Level up
+                gameState.targetLevel++;
+                
+                // Calculate new target (100, 200, 300, 400, etc.)
+                const newTarget = gameState.targetLevel * gameState.targetIncrement;
+                
+                // Show celebration message
+                showTargetAchievement(gameState.target, newTarget);
+                
+                // Update the target
+                gameState.target = newTarget;
+                
+                console.log(`🎯 Target achieved! New target: $${newTarget}`);
+                
+                return true;
+            }
+            return false;
+        }
+
+        function showTargetAchievement(oldTarget, newTarget) {
+            showAlert(
+                `🎉 TARGET ACHIEVED! 🎉\n` +
+                `You reached $${oldTarget}!\n` +
+                `New target: $${newTarget}\n` +
+                `Keep growing your coffee empire!`, 
+                'success'
+            );
+            
+            // Flash effect on progress bar
+            const progressBar = document.getElementById('targetProgress');
+            if (progressBar) {
+                progressBar.style.background = 'linear-gradient(90deg, #f1c40f, #f39c12)';
+                setTimeout(() => {
+                    progressBar.style.background = 'linear-gradient(90deg, #e74c3c, #1abc9c)';
+                }, 2000);
+            }
+        }
+
+        function updateTargetDisplay() {
+    // Put both target amount and level in the same element
+    document.getElementById('target').innerHTML = `${gameState.target.toFixed(0)} <small style="font-size: 10px; color: #95a5a6;">Lv.${gameState.targetLevel}</small>`;
+    
+    // Update progress bar
+    const progress = Math.min(100, (gameState.earnings / gameState.target) * 100);
+    document.getElementById('targetProgress').style.width = progress + '%';
+}
+
+        // Menu Configuration
+        const menuFlow = {
+            0: {
+                title: "What would you like?",
+                options: [
+                    { id: 'drinks', text: '☕ Coffee Drinks', subtitle: 'Fresh brewed perfection' },
+                    { id: 'bakery', text: '🥐 Bakery Items', subtitle: 'Freshly baked goods' }
+                ]
+            },
+            1: {
+                title: "What type of coffee?",
+                options: [
+                    { id: 'latte', text: '🥛 Latte', subtitle: 'Smooth espresso with steamed milk' },
+                    { id: 'cappuccino', text: '☕ Cappuccino', subtitle: 'Rich espresso with thick foam' },
+                    { id: 'expresso', text: '⚡ Espresso', subtitle: 'Pure concentrated coffee shot' }
+                ]
+            },
+            2: {
+                title: "Hot or Iced?",
+                options: [
+                    { id: 'hot', text: '🔥 Hot', subtitle: 'Warm and comforting' },
+                    { id: 'ice', text: '🧊 Iced', subtitle: 'Cool and refreshing' }
+                ]
+            },
+            3: {
+                title: "What size?",
+                options: [
+                    { id: 'medium', text: '🥤 Medium', subtitle: 'Perfect for most people' },
+                    { id: 'large', text: '🥤 Large', subtitle: 'Extra caffeine boost' }
+                ]
+            },
+            4: {
+                title: "What type of milk?",
+                options: [
+                    { id: 'regularmilk', text: '🥛 Regular Milk', subtitle: 'Classic dairy milk' },
+                    { id: 'oatmilk', text: '🌾 Oat Milk', subtitle: 'Creamy plant-based (+$0.20)' },
+                    { id: 'almondmilk', text: '🌰 Almond Milk', subtitle: 'Light and nutty (+$0.20)' }
+                ]
+            },
+            5: {
+        title: "How would you like to pay?",
+        options: [
+            { id: 'cash', text: '💵 Cash', subtitle: 'No additional fees' },
+            { id: 'card', text: '💳 Card', subtitle: '1.5% processing fee added' }
+        ]
+    }
+            
+        };
+        
+        
+        // Bakery Items
+        const bakeryOptions = [
+            { id: 'plain_bagel', name: 'Plain Bagel', price: 3.00, emoji: '🥯' },
+            { id: 'strawberry_cake', name: 'Strawberry Cake', price: 4.00, emoji: '🍰' },
+            { id: 'sesame_bagel', name: 'Sesameseed Bagel', price: 3.50, emoji: '🥯' },
+            { id: 'honey_bun', name: 'Honey Bun', price: 4.00, emoji: '🍯' },
+            { id: 'cinnamon_roll', name: 'Cinnamon Roll', price: 3.70, emoji: '🌀' },
+            { id: 'croissant', name: 'Croissant', price: 3.00, emoji: '🥐' }
+        ];
+
+        // Function to toggle inventory panel
+        function toggleInventory() {
+            if (inventoryVisible) {
+                closeInventory();
+            } else {
+                openInventory();
+            }
+        }
+
+        function openInventory() {
+            inventoryVisible = true;
+            document.getElementById('inventoryPanel').style.display = 'block';
+            loadInventoryData();
+        }
+
+        function closeInventory() {
+            inventoryVisible = false;
+            document.getElementById('inventoryPanel').style.display = 'none';
+        }
+
+        // Load inventory data from backend
+        async function loadInventoryData() {
+            try {
+                const response = await fetch('/api/shop/inventory');
+                const data = await response.json();
+                inventoryData = data;
+                
+                updateInventoryDisplay();
+                updateInventoryButton();
+                
+            } catch (error) {
+                console.error('Error loading inventory:', error);
+                showAlert('Failed to load inventory data', 'error');
+            }
+        }
+
+        // Update inventory display
+        function updateInventoryDisplay() {
+            const inventoryList = document.getElementById('inventoryList');
+            const inventoryAlerts = document.getElementById('inventoryAlerts');
+            const playerMoneyElement = document.getElementById('playerMoney');
+            
+            // Update player money display
+            playerMoneyElement.textContent = gameState.earnings.toFixed(2);
+            
+            // Clear existing content
+            inventoryList.innerHTML = '';
+            inventoryAlerts.innerHTML = '';
+            
+            // Check for low stock alerts
+            const lowStockItems = [];
+            const outOfStockItems = [];
+            
+            // Create inventory items
+            for (const [itemName, itemData] of Object.entries(inventoryData)) {
+                const inventoryItem = createInventoryItem(itemName, itemData);
+                inventoryList.appendChild(inventoryItem);
+                
+                // Track alerts
+                if (itemData.status === 'out') {
+                    outOfStockItems.push(itemName);
+                } else if (itemData.status === 'low' || itemData.status === 'warning') {
+                    lowStockItems.push(itemName);
+                }
+            }
+            
+            // Show alerts
+            if (outOfStockItems.length > 0) {
+                const alert = document.createElement('div');
+                alert.className = 'low-stock-alert';
+                alert.style.borderColor = '#FF4500';
+                alert.style.background = 'rgba(255, 69, 0, 0.3)';
+                alert.innerHTML = `🚨 OUT OF STOCK: ${outOfStockItems.join(', ')}`;
+                inventoryAlerts.appendChild(alert);
+            }
+            
+            if (lowStockItems.length > 0) {
+                const alert = document.createElement('div');
+                alert.className = 'low-stock-alert';
+                alert.innerHTML = `⚠️ LOW STOCK: ${lowStockItems.join(', ')}`;
+                inventoryAlerts.appendChild(alert);
+            }
+        }
+
+        // Create individual inventory item element
+        function createInventoryItem(itemName, itemData) {
+            const item = document.createElement('div');
+            item.className = 'inventory-item';
+            
+            // Apply status styling
+            if (itemData.status === 'out') {
+                item.classList.add('out-of-stock');
+            } else if (itemData.status === 'low' || itemData.status === 'warning') {
+                item.classList.add('low-stock');
+            }
+            
+            // Calculate if player can afford refill
+            const canAfford = gameState.earnings >= itemData.refill_cost;
+            const needsRefill = itemData.current < itemData.max;
+            
+            item.innerHTML = `
+                <div class="inventory-header">
+                    <span class="inventory-name">${itemName}</span>
+                    <span class="inventory-amount">${itemData.current}/${itemData.max} ${itemData.unit}</span>
+                </div>
+                <div class="inventory-bar">
+                    <div class="inventory-fill" style="width: ${itemData.percentage}%"></div>
+                </div>
+                <div style="font-size: 10px; color: #bdc3c7; margin-top: 3px;">
+                    Status: ${itemData.status.toUpperCase()} | Refill Cost: ${itemData.refill_cost.toFixed(2)}
+                </div>
+                ${needsRefill ? `
+                    <button 
+                        class="buy-button ${canAfford ? '' : 'expensive'}" 
+                        ${canAfford ? '' : 'disabled'} 
+                        onclick="buyIngredient('${itemName}', ${itemData.refill_cost})"
+                    >
+                        ${canAfford ? `💰 Buy (${itemData.refill_cost.toFixed(2)})` : `💸 Too Expensive`}
+                    </button>
+                ` : '<div style="font-size:10px;color:#228B22;text-align:right;margin-top:5px;">✅ Full Stock</div>'}
+            `;
+            
+            return item;
+        }
+
+        // Update inventory button appearance based on alerts
+        function updateInventoryButton() {
+            const inventoryBtn = document.getElementById('inventoryBtn');
+            const hasAlerts = Object.values(inventoryData).some(item => 
+                item.status === 'out' || item.status === 'low' || item.status === 'warning'
+            );
+            
+            if (hasAlerts) {
+                inventoryBtn.classList.add('alert');
+                inventoryBtn.innerHTML = '📦 Inventory ⚠️';
+            } else {
+                inventoryBtn.classList.remove('alert');
+                inventoryBtn.innerHTML = '📦 Inventory';
+            }
+        }
+
+        // Purchase ingredient function
+        async function buyIngredient(itemName, cost) {
+            if (gameState.earnings < cost) {
+                showAlert(`Not enough money! Need ${cost.toFixed(2)}, have ${gameState.earnings.toFixed(2)}`, 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/shop/purchase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        item: itemName,
+                        player_money: gameState.earnings
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Update game state
+                    gameState.earnings = result.money_remaining;
+                    
+                    // Show success message
+                    showAlert(result.message, 'success');
+                    
+                    // Refresh inventory display
+                    await loadInventoryData();
+                    updateUI();
+                    
+                    // Add success indicator
+                    const successDiv = document.createElement('div');
+                    successDiv.className = 'success-purchase';
+                    successDiv.innerHTML = `✅ ${itemName} restocked!`;
+                    document.getElementById('inventoryAlerts').appendChild(successDiv);
+                    
+                } else {
+                    showAlert(`Purchase failed: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Purchase error:', error);
+                showAlert('Error processing purchase. Please try again.', 'error');
+            }
+        }
+        
+        // 🔧 IMPROVED IMAGE LOADING WITH BETTER FALLBACKS
+        function loadCustomImages() {
+            console.log('🎨 Loading custom images...');
+            updateLoadingInfo('Loading images...');
+            
+            // Only try to load images that we know might exist
+            const imagesToLoad = [
+                { name: 'cafe', url: '/static/images/cafe.png', target: 'cafeBackground' },
+                { name: 'worker', url: '/static/images/worker.png', target: 'workerSprite' }
+            ];
+            
+            // Try to load a few customer images, but don't expect all 6
+            const possibleCustomerImages = [1, 2, 3, 4, 5, 6,7,8,9];
+            possibleCustomerImages.forEach(i => {
+                imagesToLoad.push({
+                    name: `customer${i}`, 
+                    url: `/static/images/customer${i}.png`, 
+                    target: 'customerSprites',
+                    index: i - 1,
+                    optional: true // Mark as optional
+                });
+            });
+            
+            let loadedCount = 0;
+            let attemptedCount = 0;
+            const totalImages = imagesToLoad.length;
+            
+            function onImageComplete() {
+                attemptedCount++;
+                updateLoadingInfo(`Loading images... ${attemptedCount}/${totalImages}`);
+                
+                if (attemptedCount >= totalImages) {
+                    console.log('🎨 Image loading completed!');
+                    console.log(`📊 Successfully loaded ${loadedCount} out of ${totalImages} images`);
+                    console.log(`👥 Customer sprites available: ${customerSprites.filter(s => s).length}`);
+                    checkGameReady();
+                }
+            }
+            
+            // Load each image with error handling
+            imagesToLoad.forEach((imageInfo) => {
+                const img = new Image();
+                
+                img.onload = function() {
+                    console.log(`✅ Loaded ${imageInfo.name}`);
+                    loadedCount++;
+                    
+                    // Store the image in the appropriate variable
+                    if (imageInfo.target === 'cafeBackground') {
+                        cafeBackground = img;
+                    } else if (imageInfo.target === 'workerSprite') {
+                        workerSprite = img;
+                    } else if (imageInfo.target === 'customerSprites') {
+                        customerSprites[imageInfo.index] = img;
+                    }
+                    
+                    onImageComplete();
+                };
+                
+                img.onerror = function() {
+                    if (!imageInfo.optional) {
+                        console.warn(`⚠️ Failed to load important image: ${imageInfo.name}`);
+                    } else {
+                        console.log(`ℹ️ Optional image not found: ${imageInfo.name} (using fallback)`);
+                    }
+                    onImageComplete(); // Continue anyway
+                };
+                
+                img.src = imageInfo.url;
+            });
+            
+            // Initialize empty customer sprite array to ensure we have 6 slots
+            customerSprites = new Array(9).fill(null);
+            
+            // Force start after reasonable timeout
+            imageLoadTimeout = setTimeout(() => {
+                console.log('⏰ Image loading timeout - starting game anyway');
+                checkGameReady();
+            }, 3000);
+        }
+        
+        function updateLoadingInfo(message) {
+            const loadingInfo = document.getElementById('loadingInfo');
+            if (loadingInfo) {
+                loadingInfo.textContent = message;
+            }
+        }
+        
+        function checkGameReady() {
+            if (gameInitialized) return; // Already started
+            
+            clearTimeout(imageLoadTimeout);
+            
+            // Count how many customer sprites actually loaded
+            const loadedCustomerSprites = customerSprites.filter(sprite => sprite && sprite.complete).length;
+            console.log(`🎨 Customer sprites loaded: ${loadedCustomerSprites}/10`);
+            
+            if (loadedCustomerSprites === 0) {
+                console.log('📊 No custom customer sprites found - using enhanced pixel art');
+                showAlert('Using pixel art customers (custom images not found)', 'info');
+            } else if (loadedCustomerSprites < 3) {
+                console.log(`📊 Only ${loadedCustomerSprites} customer sprites loaded - mixing with pixel art`);
+                showAlert(`${loadedCustomerSprites} custom customer images loaded`, 'info');
+            } else {
+                console.log(`📊 Good variety: ${loadedCustomerSprites} customer sprites loaded`);
+            }
+            
+            console.log('🎮 Starting game now');
+            gameInitialized = true;
+            hideLoadingScreen();
+            gameLoop();
+            showAlert('Welcome to your Coffee Shop! Click "Call Next Customer" to serve your first customer. Click Inventory to manage your stock.', 'success');
+            updateUI();
+        }
+        
+        // 🆕 SEQUENTIAL CUSTOMER SPAWNING FUNCTIONS
+        function spawnNextCustomer() {
+            if (!canSpawnNext || currentCustomer) {
+                console.log('Cannot spawn customer right now');
+                return;
+            }
+            
+            console.log('🚶‍♂️ Spawning next customer...');
+            const newCustomer = new Customer();
+            customers.push(newCustomer);
+            currentCustomer = newCustomer;
+            canSpawnNext = false;
+            
+            updateNextCustomerButton();
+            updateUI();
+        }
+        
+        function customerCompleted(customer) {
+            console.log('✅ Customer completed and leaving');
+            
+            // Small delay before allowing next customer
+            setTimeout(() => {
+                canSpawnNext = true;
+                currentCustomer = null;
+                updateNextCustomerButton();
+                updateUI();
+                
+                // Show encouragement message
+                if (gameState.customers > 0 && gameState.customers % 5 === 0) {
+                    showAlert(`Great job! You've served ${gameState.customers} customers!`, 'success');
+                }
+            }, 1500); // 1.5 second delay
+        }
+        
+        function updateNextCustomerButton() {
+            const btn = document.getElementById('nextCustomerBtn');
+            if (canSpawnNext) {
+                btn.disabled = false;
+                btn.textContent = '🚶‍♂️ Call Next Customer';
+                btn.style.opacity = '1';
+            } else {
+                btn.disabled = true;
+                btn.textContent = '⏳ Serving Current Customer';
+                btn.style.opacity = '0.6';
+            }
+        }
+        
+        // Enhanced Customer Class with sequential logic
+        class Customer {
+            constructor() {
+                this.id = customerIdCounter++;
+                // Try to select a sprite index that might exist, but also allow fallback
+                this.spriteIndex = Math.floor(Math.random() * 10);
+                this.x = canvas.width + 50; // Start off-screen to the right
+                this.y = 380; // Start at door level
+                // NEW: L-shaped path - enter → left → straight → left to counter
+                this.path = [
+    { x: 740, y: 300 },  // Enter
+    { x: 670, y: 275 },  // Diagonal left-up (half distance)
+    { x: 600, y: 250 },  // Continue diagonal left-up (half distance)
+    { x: 550, y: 275 },  // Left diagonal down (much shorter distance)
+    { x: 467, y: 278 }   // Continue to counter (1/3 distance)
+];
+                this.pathIndex = 0;
+                this.targetX = this.path[0].x;
+                this.targetY = this.path[0].y;
+                this.speed = 1.2 + (Math.random() * 0.6); // Slightly faster since they're alone
+                this.state = 'walking';
+                this.order = null;
+                this.waitTime = 0;
+                this.maxWaitTime = 4500; // Longer patience since they're the only customer
+                this.satisfied = true;
+                this.patience = 1.0;
+                this.sprite = this.generateSprite();
+                this.reactionState = null; // 'happy', 'angry', or null
+this.reactionTimer = 0;
+this.reactionDuration = 120; // 2 seconds at 60fps
+                // Debug info for this customer
+                console.log(`👤 Customer ${this.id} created with L-shaped path to counter`);
+            }
+            
+            generateSprite() {
+                const shirts = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#E74C3C', '#9B59B6', '#F39C12', '#1ABC9C', '#34495E'];
+                const pants = ['#3D5A80', '#98D8C8', '#293462', '#6A994E', '#8B4513', '#2C3E50', '#7F8C8D', '#D35400', '#8E44AD', '#16A085'];
+                const skinTones = ['#FDBCB4', '#F1C27D', '#E0AC69', '#C68642', '#8D5524', '#FFE0BD'];
+                const hairColors = ['#8B4513', '#000000', '#FFD700', '#CD853F', '#A0522D', '#696969'];
+                
+                return {
+                    shirt: shirts[Math.floor(Math.random() * shirts.length)],
+                    pants: pants[Math.floor(Math.random() * pants.length)],
+                    skin: skinTones[Math.floor(Math.random() * skinTones.length)],
+                    hair: hairColors[Math.floor(Math.random() * hairColors.length)],
+                    hasHat: Math.random() < 0.3, // 30% chance of hat
+                    hasGlasses: Math.random() < 0.2, // 20% chance of glasses
+                    style: Math.floor(Math.random() * 3) // 3 different body styles
+                };
+            }
+            showReaction(type) {
+                this.reactionState = type;
+                this.reactionTimer = this.reactionDuration;
+                
+                // Remove any existing reaction
+                this.removeReaction();
+                
+                // Create reaction popup
+                const reaction = document.createElement('div');
+                reaction.className = 'reaction-popup';
+                reaction.id = `reaction-${this.id}`;
+                
+                if (type === 'happy') {
+                    reaction.innerHTML = '<img src="/static/images/like.png" width="40" height="40" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.5));">';
+                } else if (type === 'angry') {
+                    reaction.innerHTML = '<img src="/static/images/hate.png" width="40" height="40" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.5));">';
+                }
+                
+                // Position above customer's head
+                reaction.style.left = (this.x + 80) + 'px';  // Much further right
+reaction.style.top = (this.y - 60) + 'px';  // Keep same height
+                
+                document.getElementById('gameContainer').appendChild(reaction);
+                
+                // Auto-remove after animation
+                setTimeout(() => this.removeReaction(), 2000);
+            }
+            
+            removeReaction() {
+                const reaction = document.getElementById(`reaction-${this.id}`);
+                if (reaction) reaction.remove();
+            }
+            update() {
+                switch(this.state) {
+                    case 'walking':
+                        const dx = this.targetX - this.x;
+                        const dy = this.targetY - this.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < 5) {
+                            this.pathIndex++;
+                            if (this.pathIndex >= this.path.length) {
+                                this.state = 'ordering';
+                                this.generateOrder();
+                            } else {
+                                this.targetX = this.path[this.pathIndex].x;
+                                this.targetY = this.path[this.pathIndex].y;
+                            }
+                        } else {
+                            this.x += (dx / distance) * this.speed;
+                            this.y += (dy / distance) * this.speed;
+                        }
+                        break;
+                    
+                    case 'waiting':
+    // Only count down if not in reaction state
+    if (this.reactionState) {
+        this.reactionTimer--;
+        if (this.reactionTimer <= 0) {
+            this.reactionState = null;
+            this.state = 'leaving';
+        }
+        return true; // Stay still during reaction
+    }
+    
+    this.waitTime++;
+    this.patience = Math.max(0, 1 - (this.waitTime / this.maxWaitTime));
+    
+    if (this.waitTime >= this.maxWaitTime) {
+        this.state = 'leaving';
+        this.satisfied = false;
+        this.removeSpeechBubble();
+        this.showReaction('angry'); // Show angry reaction
+        gameState.rating = Math.max(0, gameState.rating - 8);
+        showAlert('Customer left unhappy! 😞', 'error');
+    }
+    break;
+                    
+                    case 'leaving':
+    // Handle reaction timer countdown in leaving state too
+    if (this.reactionState) {
+        this.reactionTimer--;
+        if (this.reactionTimer <= 0) {
+            this.reactionState = null;
+            // Don't return here, let the leaving logic continue
+        } else {
+            return true; // Stay still during reaction
+        }
+    }
+    
+    if (!this.exitPath) {
+        this.exitPath = [
+            { x: 467, y: 278 },  // 1. Start from counter position
+            { x: 300, y: 200 },  // 2. Move diagonally left-up (way longer distance) and exit
+        ];
+        this.exitPathIndex = 0;
+        this.exitTargetX = this.exitPath[0].x;
+        this.exitTargetY = this.exitPath[0].y;
+    }
+                    
+    const dx2 = this.exitTargetX - this.x;
+    const dy2 = this.exitTargetY - this.y;
+    const distance2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+    
+    if (distance2 < 10) {
+        this.exitPathIndex++;
+        if (this.exitPathIndex >= this.exitPath.length) {
+            // Customer has fully exited - trigger next customer availability
+            customerCompleted(this);
+            return false;
+        } else {
+            this.exitTargetX = this.exitPath[this.exitPathIndex].x;
+            this.exitTargetY = this.exitPath[this.exitPathIndex].y;
+        }
+    } else {
+        this.x += (dx2 / distance2) * this.speed * 1.5;
+        this.y += (dy2 / distance2) * this.speed * 1.5;
+    }
+    break;
+                }
+                return true;
+            }
+            
+            generateOrder() {
+    if (gameState.allMenuItems.length > 0) {
+        const coffeeItems = gameState.allMenuItems.filter(item => 
+            item.category === 'coffee' || item.name.toLowerCase().includes('coffee'));
+        const bakeryItems = gameState.allMenuItems.filter(item => 
+            item.category === 'bakery' || item.category === 'food');
+        
+        let selectedItem;
+        if (Math.random() < 0.7 && coffeeItems.length > 0) {
+            selectedItem = coffeeItems[Math.floor(Math.random() * coffeeItems.length)];
+        } else if (bakeryItems.length > 0) {
+            selectedItem = bakeryItems[Math.floor(Math.random() * bakeryItems.length)];
+        } else {
+            selectedItem = gameState.allMenuItems[Math.floor(Math.random() * gameState.allMenuItems.length)];
+        }
+        
+        // NEW: Add preferred payment method
+        const paymentMethods = ['cash', 'card'];
+        const preferredPayment = paymentMethods[Math.floor(Math.random() * paymentMethods.length)];
+        
+        this.order = {
+            ...selectedItem,
+            preferredPayment: preferredPayment
+        };
+        this.state = 'waiting';
+        this.showSpeechBubble();
+    } else {
+        // NEW: Add payment method to fallback too
+        this.order = { 
+            id: 'fallback', 
+            name: 'Coffee', 
+            price: 4.50, 
+            category: 'coffee',
+            preferredPayment: Math.random() < 0.5 ? 'cash' : 'card'
+        };
+        this.state = 'waiting';
+        this.showSpeechBubble();
+    }
+}
+            
+            showSpeechBubble() {
+    if (!this.order) return;
+    
+    this.removeSpeechBubble();
+    
+    const bubble = document.createElement('div');
+    bubble.className = 'speech-bubble';
+    
+    // NEW: Include payment method in speech
+    const paymentText = this.order.preferredPayment === 'cash' ? 'I will pay with cash' : 'I will pay with card';
+    bubble.innerHTML = `I'd like a<br><strong>${this.order.name}</strong><br><small>$${this.order.price.toFixed(2)}</small><br><em>${paymentText}</em>`;
+    
+    // Positioned relative to customer at counter
+    bubble.style.left = (this.x + 20) + 'px';
+    bubble.style.top = (this.y - 140) + 'px';
+    bubble.id = `bubble-${this.id}`;
+    
+    document.getElementById('gameContainer').appendChild(bubble);
+    
+    setTimeout(() => this.removeSpeechBubble(), this.maxWaitTime * 16.67);
+}
+            
+            removeSpeechBubble() {
+                const bubble = document.getElementById(`bubble-${this.id}`);
+                if (bubble) bubble.remove();
+            }
+            
+            draw() {
+                // Try to use custom sprite first, but be smart about which ones exist
+                let useCustomSprite = false;
+                let spriteToUse = null;
+                
+                // Check if we have the exact sprite index
+                if (customerSprites[this.spriteIndex] && customerSprites[this.spriteIndex].complete) {
+                    spriteToUse = customerSprites[this.spriteIndex];
+                    useCustomSprite = true;
+                } else {
+                    // Try to find any available sprite
+                    for (let i = 0; i < customerSprites.length; i++) {
+                        if (customerSprites[i] && customerSprites[i].complete) {
+                            spriteToUse = customerSprites[i];
+                            useCustomSprite = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (useCustomSprite && spriteToUse) {
+                    // Draw custom sprite
+                    const spriteWidth = 80;
+                    const spriteHeight = 100;
+                    
+                    ctx.drawImage(
+                        spriteToUse,
+                        this.x - spriteWidth/2,
+                        this.y - spriteHeight + 20,
+                        spriteWidth,
+                        spriteHeight
+                    );
+                } else {
+                    // Use improved pixel art fallback
+                    this.drawDefaultCustomer();
+                }
+                
+                // Always draw patience bar if waiting
+                if (this.state === 'waiting') {
+                    this.drawPatienceBar();
+                }
+            }
+            
+            drawDefaultCustomer() {
+                // Body
+                ctx.fillStyle = this.sprite.shirt;
+                ctx.fillRect(this.x + 4, this.y - 10, 32, 40);
+                
+                // Pants
+                ctx.fillStyle = this.sprite.pants;
+                ctx.fillRect(this.x + 4, this.y + 30, 32, 25);
+                
+                // Head
+                ctx.fillStyle = this.sprite.skin;
+                ctx.fillRect(this.x + 8, this.y - 30, 24, 25);
+                
+                // Eyes
+                ctx.fillStyle = 'black';
+                ctx.fillRect(this.x + 12, this.y - 20, 3, 3);
+                ctx.fillRect(this.x + 25, this.y - 20, 3, 3);
+                
+                // Mouth
+                ctx.fillStyle = this.patience > 0.5 ? 'black' : 'red';
+                ctx.fillRect(this.x + 16, this.y - 12, 6, 2);
+                
+                // Arms
+                ctx.fillStyle = this.sprite.skin;
+                ctx.fillRect(this.x - 2, this.y + 5, 10, 20);
+                ctx.fillRect(this.x + 32, this.y + 5, 10, 20);
+                
+                // Legs
+                ctx.fillRect(this.x + 8, this.y + 55, 8, 20);
+                ctx.fillRect(this.x + 24, this.y + 55, 8, 20);
+            }
+            
+            drawPatienceBar() {
+                const barWidth = 60; 
+                const barHeight = 8;
+                const barX = this.x - barWidth/2;
+                const barY = this.y - 100; // Adjusted for counter height (y=320)
+                
+                // Background
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+                
+                // Patience bar
+                const patienceColor = this.patience > 0.6 ? '#27ae60' : 
+                                    this.patience > 0.3 ? '#f39c12' : '#e74c3c';
+                ctx.fillStyle = patienceColor;
+                ctx.fillRect(barX, barY, barWidth * this.patience, barHeight);
+                
+                // Border
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(barX, barY, barWidth, barHeight);
+            }
+        }
+        
+        // 🎮 Game Initialization
+        function init() {
+            console.log('🎮 Initializing Sequential Coffee Simulator...');
+            showLoadingScreen(true);
+            
+            // Start everything simultaneously
+            loadCustomImages();
+            connectWebSocket();
+            
+            loadGameData().then(() => {
+                console.log('✅ Game data loaded');
+                updateLoadingInfo('Game data loaded, waiting for images...');
+            }).catch(error => {
+                console.error('❌ Game initialization failed:', error);
+                hideLoadingScreen();
+                showAlert(`Failed to load game: ${error.message}`, 'error');
+            });
+            
+            canvas.addEventListener('click', handleCanvasClick);
+        }
+        
+        function showLoadingScreen(show) {
+            document.getElementById('loadingScreen').style.display = show ? 'flex' : 'none';
+        }
+        
+        function hideLoadingScreen() {
+            showLoadingScreen(false);
+        }
+        
+        function connectWebSocket() {
+            try {
+                socket = io();
+                
+                socket.on('connect', function() {
+                    console.log('🔌 Connected to server');
+                    updateLoadingInfo('Connected to server...');
+                });
+                
+                socket.on('connected', function(data) {
+                    console.log('✅ Game session started:', data.session_id);
+                });
+                
+                socket.on('inventory_updated', function(data) {
+                    gameState.inventory = data;
+                    // Update inventory display if panel is open
+                    if (inventoryVisible) {
+                        inventoryData = data;
+                        updateInventoryDisplay();
+                        updateInventoryButton();
+                    }
+                });
+                
+                socket.on('order_completed', function(data) {
+                    gameState.earnings += data.item.price || 0;
+                    gameState.customers++;
+                    updateUI();
+                });
+                
+                socket.on('disconnect', function() {
+                    console.log('🔌 Disconnected from server');
+                });
+                
+            } catch (error) {
+                console.error('❌ WebSocket connection failed:', error);
+            }
+        }
+        
+        async function loadGameData() {
+            console.log('📊 Loading game data...');
+            updateLoadingInfo('Loading game data...');
+            
+            try {
+                const testResponse = await fetch('/api/test');
+                if (!testResponse.ok) {
+                    throw new Error(`API test failed: ${testResponse.status}`);
+                }
+                
+                const testData = await testResponse.json();
+                console.log('✅ API connection successful:', testData.message);
+                
+                const [coffeeData, bakeryData, inventoryData] = await Promise.all([
+                    fetch('/api/menu/coffee').then(r => r.json()),
+                    fetch('/api/menu/bakery').then(r => r.json()),
+                    fetch('/api/shop/inventory').then(r => r.json())
+                ]);
+                
+                gameState.menu.coffee = flattenMenuData(coffeeData);
+                gameState.menu.bakery = flattenMenuData(bakeryData);
+                gameState.allMenuItems = [...gameState.menu.coffee, ...gameState.menu.bakery];
+                gameState.inventory = inventoryData;
+                
+                if (gameState.allMenuItems.length === 0) {
+                    throw new Error('No menu items loaded');
+                }
+                
+                console.log('✅ All game data loaded successfully');
+                
+            } catch (error) {
+                console.error('❌ Error loading game data:', error);
+                
+                // Use fallback data
+                gameState.menu.coffee = [
+                    { id: 'fallback_coffee', name: 'House Coffee', price: 4.50, category: 'coffee' }
+                ];
+                gameState.menu.bakery = [
+                    { id: 'fallback_bagel', name: 'Plain Bagel', price: 3.00, category: 'food' }
+                ];
+                gameState.allMenuItems = [...gameState.menu.coffee, ...gameState.menu.bakery];
+                gameState.inventory = { 'Water': { current: 1000, status: 'good' } };
+                
+                throw error;
+            }
+        }
+        
+        function flattenMenuData(menuData) {
+            const items = [];
+            
+            if (Array.isArray(menuData)) {
+                return menuData;
+            }
+            
+            if (typeof menuData === 'object') {
+                for (const category in menuData) {
+                    const categoryItems = menuData[category];
+                    if (Array.isArray(categoryItems)) {
+                        categoryItems.forEach(item => {
+                            if (typeof item === 'object') {
+                                item.category = item.category || category;
+                                items.push(item);
+                            }
+                        });
+                    }
+                }
+            }
+            
+            return items;
+        }
+        
+        function gameLoop() {
+            if (!gameInitialized) return;
+            
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function update() {
+            customers = customers.filter(customer => customer.update());
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawEnhancedShop();
+            customers.forEach(customer => customer.draw());
+        }
+        
+        function drawEnhancedShop() {
+            // Try to draw custom cafe background
+            if (cafeBackground && cafeBackground.complete) {
+                ctx.drawImage(cafeBackground, 0, 0, canvas.width, canvas.height);
+                
+                // Add title overlay
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 20px Courier New';
+                ctx.textAlign = 'center';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                ctx.strokeText('☕ CAFE SIMULATOR ☕', canvas.width/2, 40);
+                ctx.fillText('☕ CAFE SIMULATOR ☕', canvas.width/2, 40);
+                
+            } else {
+                // Fallback to pixel art
+                drawOriginalShop();
+            }
+            
+            // Try to draw custom worker
+            if (workerSprite && workerSprite.complete) {
+                const workerX = 491;
+                const workerY = 113;
+                const workerWidth = 80;
+                const workerHeight = 100;
+                
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(workerX - 10, workerY + 55);
+                ctx.lineTo(workerX + workerWidth + 10, workerY + 75);
+                ctx.lineTo(workerX + workerWidth + 10, workerY - 20);
+                ctx.lineTo(workerX - 10, workerY - 20);
+                ctx.closePath();
+                ctx.clip();
+                
+                ctx.drawImage(workerSprite, workerX, workerY, workerWidth, workerHeight);
+                ctx.restore();
+            } else {
+                drawDefaultBarista();
+            }
+        }
+        
+        function drawOriginalShop() {
+            // Floor
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, 450, canvas.width, 150);
+            
+            // Wall
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(0, 0, canvas.width, 450);
+            
+            // Counter
+            ctx.fillStyle = '#DEB887';
+            ctx.fillRect(150, 380, 500, 70);
+            
+            // Coffee machine
+            ctx.fillStyle = '#2F4F4F';
+            ctx.fillRect(480, 330, 80, 50);
+            
+            // Title
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText('☕ CAFE SIMULATOR ☕', canvas.width/2, 50);
+        }
+        
+        function drawDefaultBarista() {
+            // Default barista
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(380, 350, 30, 50);
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(385, 365, 20, 30);
+            
+            ctx.fillStyle = '#FDBCB4';
+            ctx.fillRect(385, 340, 20, 20);
+            
+            ctx.fillStyle = 'black';
+            ctx.fillRect(388, 346, 2, 2);
+            ctx.fillRect(398, 346, 2, 2);
+        }
+        
+        function handleCanvasClick(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            customers.forEach(customer => {
+                if (customer.state === 'waiting' && 
+                    x >= customer.x - 50 && x <= customer.x + 50 && // Wider click area at counter
+                    y >= customer.y - 100 && y <= customer.y + 80) { // Click area for counter position (y=320)
+                    showMenu(customer);
+                }
+            });
+        }
+        
+        // Menu functions (same as before but with customer order validation)
+        function showMenu(customer) {
+            if (!customer || !customer.order) return;
+            
+            menuState = {
+                step: 0,
+                category: null,
+                drinkType: null,
+                temperature: null,
+                size: null,
+                milk: null,
+                paymentMethod: null,
+                currentCustomer: customer
+            };
+            
+            document.getElementById('menuPanel').style.display = 'block';
+            updateHierarchicalMenu();
+        }
+        
+        function updateHierarchicalMenu() {
+            const menuGrid = document.getElementById('menuGrid');
+            const menuTitle = document.querySelector('#menuPanel > div');
+            
+            menuGrid.innerHTML = '';
+            
+            if (menuState.category === 'bakery' && menuState.step === 1) {
+                showBakerySelection();
+                return;
+            }
+            
+            if (menuState.drinkType === 'expresso' && menuState.step === 4) {
+    menuState.step = 5; // Skip milk, go directly to payment
+    updateHierarchicalMenu();
+    return;
+}
+
+// NEW: Process order after payment selection
+if (menuState.step === 6 || (menuState.category === 'bakery' && menuState.step === 2)) {
+    buildAndProcessOrder();
+    return;
+}
+            
+            const currentStep = menuFlow[menuState.step];
+            if (!currentStep) {
+                buildAndProcessOrder();
+                return;
+            }
+            
+            menuTitle.innerHTML = `<strong>📱 ${currentStep.title}</strong>`;
+            
+            currentStep.options.forEach(option => {
+                const menuItem = document.createElement('div');
+                menuItem.className = 'menu-item hierarchical-option';
+                
+                if (menuState.category === 'drinks' || option.id === 'drinks') {
+                    menuItem.classList.add('coffee-item');
+                } else if (menuState.category === 'bakery' || option.id === 'bakery') {
+                    menuItem.classList.add('food-item');
+                }
+                // NEW: Special styling for payment options
+                if (menuState.step === 5) {
+    if (option.id === 'cash') {
+        menuItem.style.background = 'linear-gradient(135deg, #27ae60, #2ecc71)';
+    } else if (option.id === 'card') {
+        menuItem.style.background = 'linear-gradient(135deg, #e67e22, #d35400)';
+    }
+}
+                menuItem.innerHTML = `
+                    <strong>${option.text}</strong><br>
+                    <small>${option.subtitle}</small>
+                `;
+                
+                menuItem.onclick = () => selectMenuOption(option.id);
+                menuGrid.appendChild(menuItem);
+            });
+            
+            if (menuState.step > 0) {
+                addBackButton();
+            }
+            
+            addStepIndicator();
+            addCustomerOrderReminder();
+        }
+        
+        function selectMenuOption(optionId) {
+            switch(menuState.step) {
+                case 0: menuState.category = optionId; break;
+                case 1: menuState.drinkType = optionId; break;
+                case 2: menuState.temperature = optionId; break;
+                case 3: menuState.size = optionId; break;
+                case 4: menuState.milk = optionId; break;
+                case 5: menuState.paymentMethod = optionId; break;
+            }
+            
+            menuState.step++;
+            updateHierarchicalMenu();
+        }
+        
+        function showBakerySelection() {
+            const menuGrid = document.getElementById('menuGrid');
+            const menuTitle = document.querySelector('#menuPanel > div');
+            
+            menuTitle.innerHTML = '<strong>🥐 Choose a bakery item</strong>';
+            
+            bakeryOptions.forEach(item => {
+                const menuItem = document.createElement('div');
+                menuItem.className = 'menu-item food-item';
+                
+                const customerOrder = menuState.currentCustomer.order.name.toLowerCase();
+                if (customerOrder.includes(item.name.toLowerCase())) {
+                    menuItem.style.border = '3px solid #f1c40f';
+                    menuItem.style.boxShadow = '0 0 15px rgba(241, 196, 15, 0.8)';
+                }
+                
+                menuItem.innerHTML = `
+                    <strong>${item.emoji} ${item.name}</strong><br>
+                    <strong>${item.price.toFixed(2)}</strong><br>
+                    <small>bakery item</small>
+                `;
+                
+                menuItem.onclick = () => {
+    // NEW: Set selected bakery item and go to payment selection
+    menuState.selectedBakeryItem = item;
+    menuState.step = 5; // Go to payment selection
+    updateHierarchicalMenu();
+};
+                menuGrid.appendChild(menuItem);  // ADD THIS LINE
+});  // ADD THIS LINE
+
+addBackButton();
+}  // ADD THIS LINE
+        function buildAndProcessOrder() {
+    if (!validateMenuState()) return;
+    
+    let finalItem = null;
+    let basePrice = 0;
+    
+    if (menuState.category === 'drinks') {
+        let orderName = '';
+        let milkType = menuState.milk || 'regularmilk';
+        
+        if (menuState.drinkType === 'expresso') {
+            milkType = '';
+            orderName = `${menuState.size} ${menuState.temperature} ${menuState.drinkType}`;
+        } else {
+            orderName = `${menuState.size} ${milkType} ${menuState.temperature} ${menuState.drinkType}`;
+        }
+        
+        if (orderName.includes('null') || orderName.includes('undefined')) {
+            showAlert('Order error: Please restart selection', 'error');
+            closeMenu();
+            return;
+        }
+        
+        // Find matching item
+        let matchingItem = gameState.allMenuItems.find(item => {
+            return item.name && item.name.toLowerCase().trim() === orderName.toLowerCase().trim();
+        });
+        
+        if (!matchingItem) {
+            showAlert(`Item not found: ${orderName}`, 'error');
+            closeMenu();
+            return;
+        }
+        
+        finalItem = matchingItem;
+        basePrice = matchingItem.price;
+        
+    } else if (menuState.category === 'bakery' && menuState.selectedBakeryItem) {
+        finalItem = {
+            id: menuState.selectedBakeryItem.id,
+            name: menuState.selectedBakeryItem.name,
+            price: menuState.selectedBakeryItem.price,
+            category: 'food'
+        };
+        basePrice = menuState.selectedBakeryItem.price;
+    }
+    
+    if (!finalItem) {
+        showAlert('Order error: No item selected', 'error');
+        closeMenu();
+        return;
+    }
+    
+    // NEW: Calculate final price with tax
+    const taxRate = menuState.paymentMethod === 'card' ? 0.015 : 0;
+    const taxAmount = basePrice * taxRate;
+    const finalPrice = basePrice + taxAmount;
+    
+    // NEW: Show price breakdown if there's tax
+    if (taxAmount > 0) {
+        showAlert(
+            `Order: ${finalItem.name}\n` +
+            `Base Price: ${basePrice.toFixed(2)}\n` +
+            `Card Fee (1.5%): ${taxAmount.toFixed(2)}\n` +
+            `Total: ${finalPrice.toFixed(2)}`, 
+            'info'
+        );
+    }
+    
+    // Update the item price for processing
+    finalItem.originalPrice = basePrice;
+    finalItem.taxAmount = taxAmount;
+    finalItem.price = finalPrice;
+    
+    processOrder(menuState.currentCustomer, finalItem);
+}
+        
+        function calculateExactSimilarity(customerOrder, builtOrder) {
+            if (!customerOrder || !builtOrder) return 0;
+            
+            const customer = customerOrder.toLowerCase().trim().replace(/\s+/g, ' ');
+            const built = builtOrder.toLowerCase().trim().replace(/\s+/g, ' ');
+            
+            if (customer === built) return 100;
+            
+            const customerWords = customer.split(' ').filter(w => w.length > 0);
+            const builtWords = built.split(' ').filter(w => w.length > 0);
+            
+            if (customerWords.length !== builtWords.length) return 0;
+            
+            let exactMatches = 0;
+            customerWords.forEach(customerWord => {
+                if (builtWords.includes(customerWord)) {
+                    exactMatches++;
+                } else {
+                    const closeMatch = builtWords.find(builtWord => 
+                        Math.abs(builtWord.length - customerWord.length) <= 1 &&
+                        (builtWord.includes(customerWord.substring(0, 4)) || 
+                         customerWord.includes(builtWord.substring(0, 4)))
+                    );
+                    if (closeMatch) {
+                        exactMatches += 0.9;
+                    }
+                }
+            });
+            
+            return Math.round((exactMatches / customerWords.length) * 100);
+        }
+        
+        function validateMenuState() {
+    // Check for payment method selection
+    if (!menuState.paymentMethod) {
+        showAlert('Please select a payment method', 'error');
+        return false;
+    }
+    
+    // NEW: Check if payment method matches customer preference
+    if (menuState.currentCustomer && menuState.currentCustomer.order && menuState.currentCustomer.order.preferredPayment) {
+        if (menuState.paymentMethod !== menuState.currentCustomer.order.preferredPayment) {
+            showAlert('Wrong payment method! Customer wants to pay with ' + menuState.currentCustomer.order.preferredPayment, 'error');
+            // Reset to payment selection step
+            menuState.step = 5;
+            menuState.paymentMethod = null;
+            setTimeout(() => {
+                updateHierarchicalMenu();
+            }, 2000);
+            return false;
+        }
+    }
+    
+    if (menuState.category === 'drinks') {
+        const required = {
+            size: menuState.size,
+            temperature: menuState.temperature,
+            drinkType: menuState.drinkType
+        };
+        
+        for (const [key, value] of Object.entries(required)) {
+            if (!value || value === 'null' || value === 'undefined') {
+                showAlert(`Selection error: Please restart your order`, 'error');
+                closeMenu();
+                return false;
+            }
+        }
+        
+        if (menuState.drinkType !== 'expresso' && (!menuState.milk || menuState.milk === 'null')) {
+            showAlert(`Please select milk type`, 'error');
+            return false;
+        }
+    } else if (menuState.category === 'bakery') {
+        if (!menuState.selectedBakeryItem) {
+            showAlert('Please select a bakery item', 'error');
+            return false;
+        }
+    }
+    
+    return true;
+}
+        
+        function addCustomerOrderReminder() {
+            const existing = document.querySelector('.customer-reminder');
+            if (existing) existing.remove();
+            
+            const reminder = document.createElement('div');
+            reminder.className = 'customer-reminder';
+            reminder.style.cssText = `
+                position: absolute;
+                bottom: 15px;
+                left: 15px;
+                right: 15px;
+                background: rgba(241, 196, 15, 0.9);
+                color: black;
+                padding: 10px;
+                border-radius: 8px;
+                font-size: 12px;
+                text-align: center;
+                font-weight: bold;
+                z-index: 25;
+                border: 2px solid #f39c12;
+            `;
+            
+            const customerOrder = menuState.currentCustomer.order?.name || 'Unknown';
+            reminder.innerHTML = `🎯 Customer wants: <strong>${customerOrder}</strong>`;
+            
+            document.getElementById('menuPanel').appendChild(reminder);
+        }
+        
+        function processBakeryOrder(bakeryItem) {
+            const orderItem = {
+                id: bakeryItem.id,
+                name: bakeryItem.name,
+                price: bakeryItem.price,
+                category: 'food'
+            };
+            
+            processOrder(menuState.currentCustomer, orderItem);
+        }
+        
+        function addBackButton() {
+            const menuGrid = document.getElementById('menuGrid');
+            
+            const backBtn = document.createElement('div');
+            backBtn.className = 'menu-item back-btn';
+            backBtn.innerHTML = '<strong>← Back</strong><br><small>Previous step</small>';
+            
+            backBtn.onclick = () => {
+                if (menuState.step > 0) {
+                    menuState.step--;
+                    updateHierarchicalMenu();
+                }
+            };
+            
+            menuGrid.appendChild(backBtn);
+        }
+        
+        function addStepIndicator() {
+    const existing = document.querySelector('.step-indicator');
+    if (existing) existing.remove();
+    
+    const indicator = document.createElement('div');
+    indicator.className = 'step-indicator';
+    indicator.style.cssText = `
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 5px 12px;
+        border-radius: 15px;
+        font-size: 11px;
+        z-index: 25;
+    `;
+    
+    let stepText = '';
+    if (menuState.category === 'bakery') {
+        if (menuState.step === 1) {
+            stepText = 'Step 2/3';
+        } else if (menuState.step === 5) {
+            stepText = 'Step 3/3';
+        }
+    } else {
+        const totalSteps = menuState.drinkType === 'expresso' ? 5 : 6; // Updated for payment step
+        stepText = `Step ${menuState.step + 1}/${totalSteps}`;
+    }
+    
+    indicator.textContent = stepText;
+    document.getElementById('menuPanel').appendChild(indicator);
+}
+        function closeMenu() {
+            document.getElementById('menuPanel').style.display = 'none';
+        }
+        
+        async function processOrder(customer, item) {
+            if (!customer || !item) return;
+            
+            try {
+                let orderType = 'coffee';
+                if (item.category === 'food' || item.category === 'bakery' || 
+                    ['Plain Bagel', 'Strawberry Cake', 'Sesameseed Bagel', 'Honey Bun', 'Cinnamon Roll', 'Croissant'].includes(item.name)) {
+                    orderType = 'food';
+                }
+                
+                const orderData = {
+                    type: orderType,
+                    item_id: item.id || item.name.toLowerCase().replace(/\s+/g, '_'),
+                    payment_method: menuState.paymentMethod,
+                    payment_details: { 
+    cash_amount: item.price + 1.00,
+    tip: customer.patience > 0.7 ? 0.50 : 0,
+    // NEW: Include tax information
+    base_price: item.originalPrice || item.price,
+    tax_amount: item.taxAmount || 0,
+    payment_type: menuState.paymentMethod
+}
+                };
+                
+                const response = await fetch('/api/game/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+    customer.removeSpeechBubble();
+    
+    // Check if order is correct (simple matching)
+    const customerOrder = customer.order?.name?.toLowerCase().trim() || '';
+    const providedOrder = item.name?.toLowerCase().trim() || '';
+    const orderCorrect = customerOrder === providedOrder || 
+                        customerOrder.includes(providedOrder) || 
+                        providedOrder.includes(customerOrder);
+    
+    // Show appropriate reaction
+    if (orderCorrect && customer.patience > 0.5) {
+        customer.showReaction('happy');
+        customer.satisfied = true;
+        gameState.rating = Math.min(100, gameState.rating + 2);
+        const paymentInfo = menuState.paymentMethod === 'card' && item.taxAmount > 0 
+    ? ` (${menuState.paymentMethod}, +${item.taxAmount.toFixed(2)} fee)` 
+    : ` (${menuState.paymentMethod})`;
+const bonus = orderData.payment_details.tip > 0 ? ` + ${orderData.payment_details.tip.toFixed(2)} tip!` : '';
+
+showAlert(`Order completed! +${item.price.toFixed(2)}${paymentInfo}${bonus}`, 'success');
+    } else {
+        customer.showReaction('angry');
+        customer.satisfied = false;
+        gameState.rating = Math.max(0, gameState.rating - 3);
+        showAlert(`Order canceled, customer unhappy!`, 'error');
+    }
+    
+    customer.state = 'leaving';
+    gameState.earnings += item.price;
+    gameState.customers++;
+    updateUI();
+    
+    // Update inventory after order
+    if (inventoryVisible) {
+        setTimeout(() => {
+            loadInventoryData();
+        }, 1000);
+    }
+    
+} else {
+    showAlert(`Error: ${result.error}`, 'error');
+    customer.showReaction('angry');
+    customer.state = 'leaving';
+}
+                
+            } catch (error) {
+                showAlert('Error processing order. Please try again.', 'error');
+            }
+            
+            closeMenu();
+        }
+        
+        function updateUI() {
+    document.getElementById('earnings').textContent = gameState.earnings.toFixed(2);
+    document.getElementById('customers').textContent = gameState.customers;
+    document.getElementById('rating').textContent = Math.round(gameState.rating);
+    
+    // 🎯 Check for target progression BEFORE updating display
+    const targetUpdated = checkTargetProgression();
+    
+    // Update target display (will show new target if it was updated)
+    updateTargetDisplay();
+    
+    // Update customer status display
+    const queueList = document.getElementById('queueList');
+    const currentCustomerInShop = customers.find(c => c.state === 'waiting' || c.state === 'ordering');
+    
+    if (currentCustomerInShop) {
+        if (currentCustomerInShop.state === 'ordering') {
+            queueList.innerHTML = '<div style="color: #3498db;">🚶‍♂️ Customer walking in...</div>';
+        } else if (currentCustomerInShop.state === 'waiting') {
+            const patienceColor = currentCustomerInShop.patience > 0.6 ? '#27ae60' : 
+                                currentCustomerInShop.patience > 0.3 ? '#f39c12' : '#e74c3c';
+            queueList.innerHTML = `
+                <div><strong>Current Customer:</strong></div>
+                <div style="margin-top: 8px;">
+                    <strong>${currentCustomerInShop.order ? currentCustomerInShop.order.name : 'Deciding...'}</strong><br>
+                    <small style="color: ${patienceColor};">Patience: ${Math.round(currentCustomerInShop.patience * 100)}%</small>
+                </div>
+            `;
+        }
+    } else if (canSpawnNext) {
+        queueList.innerHTML = '<div style="color: #27ae60;">✅ Ready for next customer!</div>';
+    } else {
+        queueList.innerHTML = '<div style="color: #f39c12;">🚶‍♂️ Customer leaving...</div>';
+    }
+    
+    updateNextCustomerButton();
+    
+    // Update inventory button if visible
+    if (inventoryVisible) {
+        const playerMoneyElement = document.getElementById('playerMoney');
+        if (playerMoneyElement) {
+            playerMoneyElement.textContent = gameState.earnings.toFixed(2);
+        }
+    }
+}
+        
+        function showAlert(message, type = 'info') {
+            const alertBox = document.getElementById('alertBox');
+            const alertText = document.getElementById('alertText');
+            
+            alertText.textContent = message;
+            
+            alertBox.classList.remove('success-alert', 'info-alert');
+            
+            if (type === 'success') {
+                alertBox.classList.add('success-alert');
+            } else if (type === 'info') {
+                alertBox.classList.add('info-alert');
+            }
+            
+            alertBox.style.display = 'block';
+            setTimeout(closeAlert, 3000);
+        }
+        
+        function closeAlert() {
+            document.getElementById('alertBox').style.display = 'none';
+        }
+        
+        function goHome() {
+            if (confirm('Are you sure you want to leave your coffee shop?')) {
+                window.location.href = '/';
+            }
+        }
+        
+        // Start the game
+        window.addEventListener('load', () => {
+    init();
+    initializeTargetSystem();
+});
+        setInterval(updateUI, 1000);
+        
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Escape') {
+                closeMenu();
+                closeAlert();
+                closeInventory();
+            }
+            if (event.code === 'Space' && canSpawnNext) {
+                spawnNextCustomer();
+            }
+            if (event.code === 'KeyI') {
+                toggleInventory();
+            }
+        });
+        
+        function initializeTargetSystem() {
+    console.log('🎯 Progressive Target System initialized');
+    console.log(`Starting target: $${gameState.target} (Level ${gameState.targetLevel})`);
+    updateTargetDisplay();
+}
+
+// Add to game initialization
+window.addEventListener('load', () => {
+    init();
+    initializeTargetSystem();
+});
+
+console.log('☕ Sequential Coffee Simulator loaded with Progressive Target System!');
+    </script>
+</body>
+</html>

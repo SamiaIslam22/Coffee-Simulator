@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>☕ Coffee Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #8B4513 0%, #D2691E 50%, #DEB887 100%);
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .launcher {
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            padding: 60px;
+            border-radius: 20px;
+            border: 4px solid #DEB887;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        
+        .title {
+            font-size: 4em;
+            margin-bottom: 10px;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.7);
+            color: #DEB887;
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            margin-bottom: 40px;
+            color: #ccc;
+        }
+        
+        .play-button {
+            background: linear-gradient(135deg, #D2691E, #8B4513);
+            color: white;
+            border: none;
+            padding: 20px 50px;
+            font-size: 1.5em;
+            font-family: 'Courier New', monospace;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            margin: 10px;
+        }
+        
+        .play-button:hover {
+            background: linear-gradient(135deg, #8B4513, #A0522D);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+        }
+
+        .about-button {
+            background: linear-gradient(135deg, #D2691E, #CD853F);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1em;
+            font-family: 'Courier New', monospace;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 1px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+            margin: 10px;
+        }
+        
+        .about-button:hover {
+            background: linear-gradient(135deg, #CD853F, #DEB887);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        }
+        
+        .coffee-animation {
+            font-size: 2em;
+            margin: 30px 0;
+            animation: steam 2s ease-in-out infinite;
+        }
+        
+        @keyframes steam {
+            0%, 100% { transform: translateY(0); opacity: 1; }
+            50% { transform: translateY(-10px); opacity: 0.7; }
+        }
+
+        /* About Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #E6D3B7, #DCC9AA);
+            margin: 5% auto;
+            padding: 0;
+            border: 3px solid #DEB887;
+            border-radius: 15px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(222, 184, 135, 0.3);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #8B4513, #D2691E);
+            padding: 20px 30px;
+            border-bottom: 2px solid #DEB887;
+            position: relative;
+        }
+
+        .modal-title {
+            font-size: 2em;
+            margin: 0;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+
+        .close {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-size: 2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .close:hover {
+            background: rgba(255,69,0,0.8);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .modal-body {
+            padding: 30px;
+            max-height: 60vh;
+            overflow-y: auto;
+            color: #3c2414;
+            line-height: 1.6;
+        }
+
+        .modal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .modal-body::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb {
+            background: #D2691E;
+            border-radius: 4px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            border-left: 4px solid #DEB887;
+        }
+
+        .section h3 {
+            color: #DEB887;
+            margin-top: 0;
+            font-size: 1.3em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .section p {
+            margin-bottom: 15px;
+            font-size: 1em;
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(241, 196, 15, 0.1));
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(241, 196, 15, 0.3);
+            margin: 15px 0;
+        }
+
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .tech-item {
+            background: rgba(210, 105, 30, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(210, 105, 30, 0.3);
+            text-align: center;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .version-badge {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            display: inline-block;
+            margin: 10px 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .emoji {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                margin: 2% auto;
+                max-height: 90vh;
+            }
+            
+            .modal-body {
+                padding: 20px;
+                max-height: 70vh;
+            }
+            
+            .launcher {
+                padding: 40px 30px;
+            }
+            
+            .title {
+                font-size: 3em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="launcher">
+        <div class="title">☕ COFFEE SIMULATOR</div>
+        <div class="coffee-animation">☕</div>
+        <div class="subtitle">Run your own pixel coffee shop!</div>
+        
+        <div class="button-group">
+            <button class="play-button" onclick="startGame()">Let's Play!</button>
+            <button class="about-button" onclick="openAbout()">📖 About Author</button>
+        </div>
+
+        <div class="version-badge">v2.0 - Web Edition</div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">☕ About the Coffee Simulator</h2>
+                <span class="close" onclick="closeAbout()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>
+                    This Coffee Simulator was my very first Python project during my freshman year of college. It was a simple 
+                    terminal-based application where everything happened through text - you'd see menu options in the terminal, 
+                    select items by typing numbers, and watch text responses scroll by. Basic classes, simple input/output, 
+                    and a lot of trial and error.
+                </p>
+                <p>
+                    Now, as I'm in my senior year, I wanted to transform this precious piece of my programming journey. 
+                    I know this might seem like a silly project, or maybe not as robust as regular Python projects that others 
+                    might build. But this holds precious memories of my youth that I want to hold onto and make better.
+                </p>
+                <p>
+                    It's not about building the most complex system. It's about showing that it doesn't matter if the starting point 
+                    feels so small and insignificant. What matters is how you grow and make it better - day by day, month by month, 
+                    and for me, semester by semester.
+                </p>
+                <p>
+                    Every developer has that one project that represents their beginning. This coffee shop simulator is mine. 
+                    When I look at the original code now, I can see every struggle, every small victory, every moment when 
+                    something finally worked after hours of debugging.
+                </p>
+                <p>
+                    Transforming it into this web game isn't just about showcasing technical skills - it's about honoring 
+                    that journey. It's about taking something that meant the world to freshman me and showing how much I've 
+                    grown, while keeping the heart of what made it special in the first place.
+                </p>
+                <p>
+                    What started as 200 lines of basic Python with simple input() and print() statements has evolved into a 
+                    full-stack web application with real-time inventory management, customer AI, and interactive gameplay. 
+                    But every coffee option, every bakery item, every piece of business logic from that original freshman 
+                    project is still here, preserved and enhanced.
+                </p>
+                <p>
+                    Growth isn't about abandoning where you started. It's about taking those precious first steps and building 
+                    something beautiful on that foundation. Because sometimes the most meaningful progress isn't about starting 
+                    over - it's about taking what you built with young, eager hands and making it shine.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function startGame() {
+            window.location.href = '/pixel';
+        }
+
+        function openAbout() {
+            document.getElementById('aboutModal').style.display = 'block';
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        }
+
+        function closeAbout() {
+            document.getElementById('aboutModal').style.display = 'none';
+            document.body.style.overflow = 'auto'; // Restore scrolling
+        }
+        
+        // Add keyboard interaction
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Space' || event.code === 'Enter') {
+                if (document.getElementById('aboutModal').style.display !== 'block') {
+                    startGame();
+                }
+            }
+            if (event.code === 'Escape') {
+                closeAbout();
+            }
+        });
+
+        // Close modal when clicking outside of it
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('aboutModal');
+            if (event.target === modal) {
+                closeAbout();
+            }
+        });
+    </script>
+</body>
+</html>

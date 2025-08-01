@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python run.py"
+restartPolicyType = "always"
+
+[env]
+FLASK_ENV = "production"
