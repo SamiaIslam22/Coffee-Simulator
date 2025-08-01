@@ -1,3 +1,5 @@
+<img width="1274" height="878" alt="image" src="https://github.com/user-attachments/assets/d5368ff8-22c7-4d5c-9be7-b048a446a41f" />
+
 # ☕ Coffee Simulator - From CLI to Web Game
 
 **A Journey of Growth: Transforming My First Python Project into an Interactive Web Experience**
