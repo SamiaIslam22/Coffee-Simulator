@@ -1970,9 +1970,87 @@ if (menuState.step === 6 || (menuState.category === 'bakery' && menuState.step =
 
 addBackButton();
 }  // ADD THIS LINE
-        // 🔧 FIXED processOrder function - prevents duplicate counting
+
+function buildAndProcessOrder() {
+    if (!validateMenuState()) return;
+    
+    let finalItem = null;
+    let basePrice = 0;
+    
+    if (menuState.category === 'drinks') {
+        let orderName = '';
+        let milkType = menuState.milk || 'regularmilk';
+        
+        if (menuState.drinkType === 'expresso') {
+            milkType = '';
+            orderName = `${menuState.size} ${menuState.temperature} ${menuState.drinkType}`;
+        } else {
+            orderName = `${menuState.size} ${milkType} ${menuState.temperature} ${menuState.drinkType}`;
+        }
+        
+        if (orderName.includes('null') || orderName.includes('undefined')) {
+            showAlert('Order error: Please restart selection', 'error');
+            closeMenu();
+            return;
+        }
+        
+        // Find matching item
+        let matchingItem = gameState.allMenuItems.find(item => {
+            return item.name && item.name.toLowerCase().trim() === orderName.toLowerCase().trim();
+        });
+        
+        if (!matchingItem) {
+            showAlert(`Item not found: ${orderName}`, 'error');
+            closeMenu();
+            return;
+        }
+        
+        finalItem = matchingItem;
+        basePrice = matchingItem.price;
+        
+    } else if (menuState.category === 'bakery' && menuState.selectedBakeryItem) {
+        finalItem = {
+            id: menuState.selectedBakeryItem.id,
+            name: menuState.selectedBakeryItem.name,
+            price: menuState.selectedBakeryItem.price,
+            category: 'food'
+        };
+        basePrice = menuState.selectedBakeryItem.price;
+    }
+    
+    if (!finalItem) {
+        showAlert('Order error: No item selected', 'error');
+        closeMenu();
+        return;
+    }
+    
+    // Calculate final price with tax
+    const taxRate = menuState.paymentMethod === 'card' ? 0.015 : 0;
+    const taxAmount = basePrice * taxRate;
+    const finalPrice = basePrice + taxAmount;
+    
+    // Show price breakdown if there's tax
+    if (taxAmount > 0) {
+        showAlert(
+            `Order: ${finalItem.name}\n` +
+            `Base Price: $${basePrice.toFixed(2)}\n` +
+            `Card Fee (1.5%): $${taxAmount.toFixed(2)}\n` +
+            `Total: $${finalPrice.toFixed(2)}`, 
+            'info'
+        );
+    }
+    
+    // Update the item price for processing
+    finalItem.originalPrice = basePrice;
+    finalItem.taxAmount = taxAmount;
+    finalItem.price = finalPrice;
+    
+    processOrder(menuState.currentCustomer, finalItem);
+}
 async function processOrder(customer, item) {
     if (!customer || !item) return;
+    
+    console.log('🛒 Processing order:', item.name, 'for customer', customer.id);
     
     try {
         let orderType = 'coffee';
@@ -1994,6 +2072,8 @@ async function processOrder(customer, item) {
             }
         };
         
+        console.log('📡 Sending order to backend:', orderData);
+        
         const response = await fetch('/api/game/order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2001,6 +2081,7 @@ async function processOrder(customer, item) {
         });
         
         const result = await response.json();
+        console.log('📡 Backend response:', result);
         
         if (result.success) {
             customer.removeSpeechBubble();
@@ -2011,6 +2092,8 @@ async function processOrder(customer, item) {
             const orderCorrect = customerOrder === providedOrder || 
                                customerOrder.includes(providedOrder) || 
                                providedOrder.includes(customerOrder);
+            
+            console.log('🎯 Order check:', customerOrder, 'vs', providedOrder, '=', orderCorrect);
             
             // Show appropriate reaction
             if (orderCorrect && customer.patience > 0.5) {
@@ -2026,9 +2109,13 @@ async function processOrder(customer, item) {
                 showAlert(`Order completed! +$${item.price.toFixed(2)}${paymentInfo}${bonus}`, 'success');
                 
                 // ✅ FIXED: Only increment earnings and customers ONCE here
-                // Remove the duplicate increment that was happening later
                 gameState.earnings += item.price;
                 gameState.customers++;
+                
+                console.log('💰 Updated game state:', {
+                    earnings: gameState.earnings,
+                    customers: gameState.customers
+                });
                 
             } else {
                 customer.showReaction('angry');
@@ -2036,7 +2123,7 @@ async function processOrder(customer, item) {
                 gameState.rating = Math.max(0, gameState.rating - 3);
                 showAlert(`Order wrong or customer unhappy!`, 'error');
                 
-                // ✅ FIXED: Only increment customer count for unhappy customers too
+                // Only increment customer count for unhappy customers too
                 gameState.customers++;
                 // Note: No earnings increment for wrong orders
             }
@@ -2061,7 +2148,7 @@ async function processOrder(customer, item) {
         }
         
     } catch (error) {
-        console.error('Order processing error:', error);
+        console.error('❌ Order processing error:', error);
         showAlert('Error processing order. Please try again.', 'error');
         customer.showReaction('angry');
         customer.state = 'leaving';
@@ -2071,6 +2158,7 @@ async function processOrder(customer, item) {
     
     closeMenu();
 }
+
 
 
         function calculateExactSimilarity(customerOrder, builtOrder) {
@@ -2248,90 +2336,7 @@ async function processOrder(customer, item) {
             document.getElementById('menuPanel').style.display = 'none';
         }
         
-        async function processOrder(customer, item) {
-            if (!customer || !item) return;
-            
-            try {
-                let orderType = 'coffee';
-                if (item.category === 'food' || item.category === 'bakery' || 
-                    ['Plain Bagel', 'Strawberry Cake', 'Sesameseed Bagel', 'Honey Bun', 'Cinnamon Roll', 'Croissant'].includes(item.name)) {
-                    orderType = 'food';
-                }
-                
-                const orderData = {
-                    type: orderType,
-                    item_id: item.id || item.name.toLowerCase().replace(/\s+/g, '_'),
-                    payment_method: menuState.paymentMethod,
-                    payment_details: { 
-    cash_amount: item.price + 1.00,
-    tip: customer.patience > 0.7 ? 0.50 : 0,
-    // NEW: Include tax information
-    base_price: item.originalPrice || item.price,
-    tax_amount: item.taxAmount || 0,
-    payment_type: menuState.paymentMethod
-}
-                };
-                
-                const response = await fetch('/api/game/order', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(orderData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-    customer.removeSpeechBubble();
-    
-    // Check if order is correct (simple matching)
-    const customerOrder = customer.order?.name?.toLowerCase().trim() || '';
-    const providedOrder = item.name?.toLowerCase().trim() || '';
-    const orderCorrect = customerOrder === providedOrder || 
-                        customerOrder.includes(providedOrder) || 
-                        providedOrder.includes(customerOrder);
-    
-    // Show appropriate reaction
-    if (orderCorrect && customer.patience > 0.5) {
-        customer.showReaction('happy');
-        customer.satisfied = true;
-        gameState.rating = Math.min(100, gameState.rating + 2);
-        const paymentInfo = menuState.paymentMethod === 'card' && item.taxAmount > 0 
-    ? ` (${menuState.paymentMethod}, +${item.taxAmount.toFixed(2)} fee)` 
-    : ` (${menuState.paymentMethod})`;
-const bonus = orderData.payment_details.tip > 0 ? ` + ${orderData.payment_details.tip.toFixed(2)} tip!` : '';
 
-showAlert(`Order completed! +${item.price.toFixed(2)}${paymentInfo}${bonus}`, 'success');
-    } else {
-        customer.showReaction('angry');
-        customer.satisfied = false;
-        gameState.rating = Math.max(0, gameState.rating - 3);
-        showAlert(`Order canceled, customer unhappy!`, 'error');
-    }
-    
-    customer.state = 'leaving';
-    gameState.earnings += item.price;
-    gameState.customers++;
-    updateUI();
-    
-    // Update inventory after order
-    if (inventoryVisible) {
-        setTimeout(() => {
-            loadInventoryData();
-        }, 1000);
-    }
-    
-} else {
-    showAlert(`Error: ${result.error}`, 'error');
-    customer.showReaction('angry');
-    customer.state = 'leaving';
-}
-                
-            } catch (error) {
-                showAlert('Error processing order. Please try again.', 'error');
-            }
-            
-            closeMenu();
-        }
         
         function updateUI() {
     // ✅ Only UPDATE displays, never increment values here
