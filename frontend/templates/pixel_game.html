@@ -2121,7 +2121,7 @@ async function processOrder(customer, item) {
                 customer.showReaction('angry');
                 customer.satisfied = false;
                 gameState.rating = Math.max(0, gameState.rating - 3);
-                showAlert(`Order wrong or customer unhappy!`, 'error');
+                showAlert(`Order cancelled, customer unhappy!`, 'error');
                 
                 // Only increment customer count for unhappy customers too
                 gameState.customers++;
